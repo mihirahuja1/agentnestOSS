@@ -1,0 +1,13 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /project
+    environment:
+      AGENTNEST_DOCKER_TESTS: "1"
+    volumes:
+      - .:/project
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: pytest --cov=agentnest --cov-report=term-missing
+
