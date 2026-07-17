@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentnest"
-version = "0.1.0"
+version = "0.2.0"
 description = "A secure, self-hosted runtime for isolated AI agent execution"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,12 +30,34 @@ dev = [
   "pytest-cov>=5",
   "ruff>=0.6",
   "types-docker>=7.1",
+  "types-PyYAML>=6.0",
+]
+docs = [
+  "mkdocs-material>=9.6",
+  "mkdocstrings[python]>=0.27",
+]
+kubernetes = ["kubernetes>=31,<34"]
+mcp = ["mcp>=1.2"]
+observability = ["opentelemetry-api>=1.28"]
+profiles = ["PyYAML>=6.0"]
+server = ["fastapi>=0.115", "uvicorn[standard]>=0.32"]
+all = [
+  "fastapi>=0.115",
+  "kubernetes>=31,<34",
+  "mcp>=1.2",
+  "opentelemetry-api>=1.28",
+  "PyYAML>=6.0",
+  "uvicorn[standard]>=0.32",
 ]
 
+[project.scripts]
+agentnest = "agentnest.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/agentnest/agentnest"
-Documentation = "https://github.com/agentnest/agentnest/tree/main/docs"
-Issues = "https://github.com/agentnest/agentnest/issues"
+Homepage = "https://github.com/mihirahuja1/agentnestOSS"
+Documentation = "https://mihirahuja1.github.io/agentnestOSS/"
+Issues = "https://github.com/mihirahuja1/agentnestOSS/issues"
+Changelog = "https://github.com/mihirahuja1/agentnestOSS/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentnest"]
@@ -61,3 +83,6 @@ python_version = "3.10"
 strict = true
 packages = ["agentnest"]
 
+[[tool.mypy.overrides]]
+module = ["agentnest.mcp_server", "agentnest.server"]
+disallow_untyped_decorators = false

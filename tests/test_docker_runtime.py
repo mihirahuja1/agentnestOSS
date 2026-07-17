@@ -7,7 +7,13 @@ from unittest.mock import Mock
 import pytest
 from docker.errors import DockerException, ImageNotFound
 
-from agentnest import RuntimeNotAvailableError, SandboxDestroyedError
+from agentnest import (
+    NetworkPolicy,
+    RuntimeNotAvailableError,
+    SandboxDestroyedError,
+    SecurityPolicy,
+    UnsupportedCapabilityError,
+)
 from agentnest.models import ResourceLimits, SandboxConfig
 from agentnest.runtime.docker import DockerRuntime
 
@@ -117,3 +123,45 @@ def test_nested_workdir_is_created_for_non_root_user() -> None:
     assert (Path(workspace) / "project/src").is_dir()
     assert (Path(workspace) / "project/src").stat().st_mode & 0o777 == 0o777
     runtime.destroy()
+
+
+def test_snapshot_restore_and_streaming(tmp_path: Path) -> None:
+    client, container = docker_client()
+    container.get_archive.return_value = (iter((b"tar", b"data")), {})
+    container.put_archive.return_value = True
+    container.id = "container-id"
+    client.api.exec_create.return_value = {"Id": "exec-id"}
+    client.api.exec_start.return_value = iter(((b"hello", None), (None, b"warning")))
+    client.api.exec_inspect.return_value = {"ExitCode": 4}
+    runtime = DockerRuntime(client=client)
+    runtime.create(SandboxConfig("python:test", 30))
+
+    snapshot = tmp_path / "workspace.tar"
+    metadata = runtime.snapshot(snapshot)
+    assert snapshot.read_bytes() == b"tardata"
+    assert metadata.size == 7
+    runtime.restore(snapshot)
+    assert container.put_archive.call_args.args[0] == "/"
+
+    chunks = list(runtime.stream_exec(["sh", "-c", "work"], display_command="work"))
+    assert [(chunk.stream, chunk.data, chunk.exit_code) for chunk in chunks] == [
+        ("stdout", "hello", None),
+        ("stderr", "warning", None),
+        ("status", "", 4),
+    ]
+    runtime.destroy()
+
+
+def test_docker_fails_closed_for_unsupported_security_policies() -> None:
+    client, _ = docker_client()
+    runtime = DockerRuntime(client=client)
+    policy = SecurityPolicy(network=NetworkPolicy.allowlist(domains=("example.com",)))
+    with pytest.raises(UnsupportedCapabilityError, match="cannot enforce"):
+        runtime.create(SandboxConfig("python:test", 30, security_policy=policy))
+
+    rootless = DockerRuntime(client=client)
+    client.info.return_value = {"SecurityOptions": []}
+    with pytest.raises(UnsupportedCapabilityError, match="rootless"):
+        rootless.create(
+            SandboxConfig("python:test", 30, security_policy=SecurityPolicy(rootless=True))
+        )

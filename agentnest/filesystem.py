@@ -24,6 +24,12 @@ def _relative_parts(relative_path: str) -> tuple[str, ...]:
     return parts
 
 
+def normalize_workspace_path(relative_path: str) -> str:
+    """Validate and normalize a portable workspace-relative path."""
+
+    return "/".join(_relative_parts(relative_path))
+
+
 def resolve_workspace_path(root: Path, relative_path: str) -> Path:
     """Resolve a user path while preventing absolute paths and traversal.
 

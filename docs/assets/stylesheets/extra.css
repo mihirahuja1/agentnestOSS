@@ -1,0 +1,14 @@
+:root {
+  --agentnest-ink: #101828;
+  --agentnest-indigo: #635bff;
+}
+
+.md-header { background: linear-gradient(90deg, var(--agentnest-ink), #1d2939); }
+.hero { align-items: center; display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr) 180px; padding: 3rem 0 2rem; }
+.hero h1 { font-size: clamp(2.5rem, 7vw, 4.6rem); letter-spacing: -0.05em; line-height: 0.98; margin: 0 0 1rem; }
+.hero p { color: var(--md-default-fg-color--light); font-size: 1.15rem; max-width: 42rem; }
+.hero img { filter: drop-shadow(0 1.25rem 2.5rem rgb(99 91 255 / 25%)); width: 100%; }
+.feature-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); margin: 2rem 0; }
+.feature-card { border: 1px solid var(--md-default-fg-color--lightest); border-radius: .75rem; padding: 1rem 1.1rem; }
+.feature-card h3 { margin-top: 0; }
+@media (max-width: 700px) { .hero { grid-template-columns: 1fr; } .hero img { display: none; } }

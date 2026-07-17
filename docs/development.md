@@ -1,5 +1,8 @@
 # Development guide
 
+AgentNest keeps the core small and treats infrastructure integrations as optional adapters. Changes
+should preserve this boundary and fail closed when a requested guarantee cannot be enforced.
+
 ## Prerequisites
 
 - Python 3.10 or newer
@@ -24,6 +27,7 @@ ruff check .
 ruff format --check .
 mypy agentnest
 pytest --cov=agentnest --cov-report=term-missing
+mkdocs build --strict
 ```
 
 Unit tests use an in-memory backend and do not require Docker. Integration tests are opt-in because
@@ -77,3 +81,12 @@ docs/                   design, security, and contributor docs
 3. Build with `python -m build` and inspect wheel contents.
 4. Tag the reviewed commit and publish through the project's trusted release workflow.
 
+## Documentation
+
+```bash
+pip install -e '.[docs]'
+mkdocs serve
+```
+
+Every public feature should include a copy-ready example, failure behavior, security implications,
+and backend limitations. Avoid claims stronger than the implementation.

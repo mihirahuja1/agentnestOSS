@@ -17,6 +17,8 @@ flowchart TB
     subgraph Runtime["Runtime layer"]
         Base["runtime/base.py — abstract contract"]
         Docker["runtime/docker.py — Docker adapter"]
+        K8s["runtime/kubernetes.py — Pod adapter"]
+        Remote["runtime/remote.py — worker transport"]
     end
 
     subgraph Support["Backend support"]
@@ -27,6 +29,8 @@ flowchart TB
     Sandbox --> Base
     Sandbox --> Results
     Base --> Docker
+    Base --> K8s
+    Base --> Remote
     Docker --> Files
     Docker --> Deadline
     Docker --> Daemon["Docker Engine"]
@@ -45,7 +49,7 @@ sequenceDiagram
     participant App
     participant Sandbox
     participant Backend as RuntimeBackend
-    participant Isolation as Container or future VM
+    participant Isolation as Container, Pod, or VM
 
     App->>Sandbox: Sandbox(config)
     Sandbox->>Backend: create(SandboxConfig)
@@ -86,21 +90,23 @@ Implement all methods on `RuntimeBackend`:
 4. `logs` returns accumulated process output.
 5. `destroy` is safe to call repeatedly and removes every owned resource.
 
-Then register a short backend name in `Sandbox._resolve_backend`. No other public API changes are
-required. A backend should map infrastructure failures into AgentNest exceptions and must document
-any security guarantees weaker than the Docker defaults.
+Publish a factory through the `agentnest.backends` entry-point group or register it with
+`RuntimeRegistry`. No other public API changes are required. A backend should map infrastructure
+failures into AgentNest exceptions and document guarantees weaker than the Docker defaults.
 
-## Roadmap
+## Capability interfaces
 
-The interfaces anticipate, but v1 does not implement:
+Streaming and snapshots are optional, runtime-checkable protocols. Policies, events, approvals,
+secrets, pools, templates, and artifacts remain backend-neutral. This prevents specialized features
+from expanding the minimum runtime contract.
 
-- Kubernetes and remote execution backends
-- gVisor, Kata Containers, and Firecracker isolation
-- browser and GPU sandboxes
-- MCP tool adapters
-- snapshots, restore, and persistent workspaces
-- parallel warm sandbox pools
+## Included integration surfaces
 
-Features should be added only when they fit the backend contract or justify a small,
-backend-independent capability interface. AgentNest will not become a cluster orchestrator.
+- gVisor and Kata through Docker OCI runtime selection
+- Kubernetes Pods and NetworkPolicy
+- versioned remote execution API and Firecracker worker transport
+- browser and GPU presets
+- MCP tools, CLI, YAML profiles, snapshots, artifacts, and warm pools
 
+AgentNest intentionally does not implement a cluster scheduler, image registry, network overlay, or
+Firecracker lifecycle daemon. It composes with that infrastructure through narrow adapters.

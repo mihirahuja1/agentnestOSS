@@ -21,7 +21,7 @@ API intentionally has no arbitrary volume-mount option.
 - Runtime images are part of the trusted computing base. Pin production images by digest, minimize
   installed software, and scan them.
 - The host kernel remains shared with containers. For strongly hostile multi-tenant workloads,
-  pair a future AgentNest backend with gVisor, Kata, or a micro-VM boundary.
+  use the gVisor, Kata, Kubernetes RuntimeClass, or Firecracker worker integrations.
 - Enabling networking permits data exfiltration and access to whatever the Docker network can reach.
   Use egress policy outside AgentNest when finer control is needed.
 - Resource limits mitigate denial of service; they do not eliminate daemon, disk, or kernel-level
@@ -35,3 +35,10 @@ off, set short timeouts, size limits conservatively, and monitor managed contain
 
 Report suspected vulnerabilities privately to the project maintainers rather than opening a public
 issue containing exploit details.
+
+## Fail-closed policy behavior
+
+Backends reject controls they cannot enforce. Docker rejects domain/CIDR allowlists. Kubernetes
+rejects domain allowlists but can create CIDR NetworkPolicy rules. Rootless policy checks the daemon
+before creating a container. Image allowlists and digest requirements are validated before pulling.
+Captured output has a bounded size, and explicit `Secret` values are redacted.

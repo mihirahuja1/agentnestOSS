@@ -27,3 +27,15 @@ class ExecutionTimeoutError(ExecutionError):
 
 class FileAccessError(AgentNestError):
     """Raised for unsafe, missing, or invalid workspace file operations."""
+
+
+class PolicyDeniedError(AgentNestError):
+    """Raised when a security policy or approval hook rejects an action."""
+
+
+class UnsupportedCapabilityError(AgentNestError):
+    """Raised when a backend cannot safely provide a requested capability."""
+
+
+class PoolExhaustedError(AgentNestError):
+    """Raised when a sandbox pool cannot provide an instance before its deadline."""
