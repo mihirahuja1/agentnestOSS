@@ -97,6 +97,27 @@ flowchart LR
 
 Read the [quickstart](docs/quickstart.md), [architecture](docs/architecture.md), [deployment guide](docs/deployment.md), and complete [documentation](docs/index.md).
 
+## Roadmap
+
+### Self-hosted sandbox manager
+
+Planned: an optional service for teams that need to run many sandboxes at once. Applications will
+send it a sandbox request, and the manager will create, track, and delete the temporary environments
+on the team's existing Kubernetes cluster.
+
+The manager will provide:
+
+- Queues and per-user limits so one application cannot consume every available resource
+- Automatic cleanup if an application disconnects or crashes
+- A dedicated Kubernetes namespace for sandbox workloads
+- gVisor-backed sandboxes for stronger isolation
+- Central logs, audit history, usage metrics, and health checks
+- Warm sandbox pools for faster startup
+
+This will remain optional. Developers will still be able to use the current `Sandbox` API directly
+with Docker or Kubernetes. AgentNest will use existing infrastructure rather than replace Docker or
+Kubernetes.
+
 ## Development
 
 ```bash
