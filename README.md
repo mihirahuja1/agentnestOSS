@@ -28,10 +28,19 @@ with Sandbox("python:3.12-slim", timeout=60) as sandbox:
 ## Why AgentNest
 
 - **Secure defaults:** non-root, read-only root, no capabilities, denied networking, limits, cleanup
-- **Backend-independent:** Docker, gVisor, Kata, Kubernetes, remote workers, Firecracker transport
-- **Agent-native:** async, streaming, secrets, approvals, audit events, snapshots, pools, artifacts
-- **Self-hosted:** one Docker installation locally; your own nodes and policies in production
-- **Extensible:** third-party runtime plugins through standard Python entry points
+- **Egress allowlisting:** let code reach `pypi.org` and nothing else, with every connection logged
+- **Agent-native:** stateful Python sessions, forkable state, async, streaming, secrets, approvals, audit events
+- **Non-destructive timeouts:** a slow command is killed on its own; the sandbox and its state survive
+- **Crash-safe:** every resource is labelled with a deadline, so `agentnest prune` reaps orphans
+- **Proven, not promised:** a [suite of escape attempts](tests/escapes) runs on every commit
+- **Self-hosted & extensible:** your Docker or Kubernetes; third-party backends via entry points
+
+Try it in one command (needs Docker):
+
+```bash
+pip install agentnest
+agentnest demo
+```
 
 > [!WARNING]
 > Containers share the host kernel. Choose an isolation boundary appropriate for your threat model.
@@ -79,8 +88,87 @@ with Sandbox(
         print(artifact.path, artifact.sha256)
 ```
 
+### Egress allowlisting
+
+Give code the network it needs and nothing more. Denied is still the default;
+an allowlist routes traffic through a filtering proxy that only lets approved
+domains through.
+
+```python
+from agentnest import NetworkPolicy, Sandbox, SecurityPolicy
+
+policy = SecurityPolicy(network=NetworkPolicy.allowlist(domains=("pypi.org", "files.pythonhosted.org")))
+with Sandbox("python:3.12-slim", security_policy=policy) as sandbox:
+    sandbox.exec_shell("pip install --user requests").check()   # reaches PyPI
+    blocked = sandbox.exec_python("import urllib.request; urllib.request.urlopen('https://evil.example')")
+    assert not blocked.ok                                       # everything else is refused
+```
+
+### Stateful sessions
+
+A persistent interpreter keeps variables and imports across calls — the code
+interpreter model, self-hosted.
+
+```python
+with Sandbox("python:3.12-slim") as sandbox:
+    session = sandbox.python_session()
+    session.run("import pandas as pd; df = pd.DataFrame({'x': [1, 2, 3]})")
+    print(session.run("df['x'].sum()").check().result)   # -> 6
+```
+
+### Forkable sandboxes
+
+Branch a running sandbox's state, explore several continuations, keep the one
+that worked — parallel A/B attempts and agent tree search without re-running
+from scratch.
+
+```python
+with Sandbox("python:3.12-slim") as base:
+    base.write_file("state.json", "{}")
+    attempt_a = base.fork()
+    attempt_b = base.fork()   # independent copies; neither sees the other's writes
+```
+
 Also included: `AsyncSandbox`, deterministic `Template` builds, bounded `SandboxPool`, Git workspace
 helpers, browser/GPU presets, MCP tools, YAML profiles, a CLI, and an authenticated remote API.
+
+## How it compares
+
+AgentNest is a self-hosted control layer, not a hosted sandbox service. The
+distinction that matters: it decides what an agent's code is *allowed to do* and
+records what it *did*, across whatever backend you run.
+
+| | AgentNest | E2B | Modal Sandboxes | microsandbox | llm-sandbox |
+| --- | --- | --- | --- | --- | --- |
+| Self-hosted, no account | ✅ | ⚠️ hosted | ⚠️ hosted | ✅ | ✅ |
+| Domain egress allowlist | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Stateful REPL sessions | ✅ | ✅ | ✅ | ✅ | ⚠️ partial |
+| Forkable state | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Approval hooks + audit events | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Pluggable isolation backend | ✅ | ❌ | ❌ | ❌ | ⚠️ |
+| Auditable in an afternoon (~4k LOC) | ✅ | ❌ | ❌ | ⚠️ | ✅ |
+
+See [benchmarks](docs/benchmarks.md) for measured cold-start and round-trip latencies.
+
+## Agent frameworks and MCP
+
+Give an existing agent a sandboxed code tool without changing its security story:
+
+```python
+from agentnest.integrations.langchain import build_langchain_tool
+
+tool = build_langchain_tool(network_enabled=False)   # a LangChain StructuredTool
+```
+
+There is a smolagents executor and a framework-neutral `SandboxRunner` too. Or
+expose AgentNest over the Model Context Protocol so Claude Code, Cursor, or
+Claude Desktop can run code safely in one line of config:
+
+```json
+{ "mcpServers": { "agentnest": { "command": "agentnest", "args": ["mcp"] } } }
+```
+
+See the [integration guide](docs/guides/integrations.md).
 
 ## Architecture
 

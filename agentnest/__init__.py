@@ -25,9 +25,10 @@ from agentnest.policy import NetworkMode, NetworkPolicy, SecurityPolicy
 from agentnest.pool import SandboxPool
 from agentnest.sandbox import Sandbox
 from agentnest.secrets import Secret
+from agentnest.session import PythonSession, SessionResult
 from agentnest.templates import Template
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "AgentNestError",
@@ -46,6 +47,7 @@ __all__ = [
     "OpenTelemetryObserver",
     "PolicyDeniedError",
     "PoolExhaustedError",
+    "PythonSession",
     "ResourceLimits",
     "RuntimeNotAvailableError",
     "Sandbox",
@@ -54,6 +56,7 @@ __all__ = [
     "SandboxPool",
     "Secret",
     "SecurityPolicy",
+    "SessionResult",
     "SnapshotMetadata",
     "Template",
     "UnsupportedCapabilityError",

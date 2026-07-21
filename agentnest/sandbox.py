@@ -21,10 +21,9 @@ from agentnest.approvals import (
     require_approval,
 )
 from agentnest.artifacts import Artifact
-from agentnest.capabilities import SnapshotBackend, StreamingBackend
+from agentnest.capabilities import ForkableBackend, SnapshotBackend, StreamingBackend
 from agentnest.events import EventObserver, EventType, SandboxEvent
 from agentnest.exceptions import (
-    ExecutionTimeoutError,
     SandboxDestroyedError,
     UnsupportedCapabilityError,
 )
@@ -40,6 +39,7 @@ from agentnest.policy import NetworkMode, NetworkPolicy, SecurityPolicy
 from agentnest.registry import registry
 from agentnest.runtime.base import RuntimeBackend
 from agentnest.secrets import Secret, redact, reveal_environment
+from agentnest.session import PythonSession
 
 
 class Sandbox:
@@ -119,25 +119,21 @@ class Sandbox:
         self._approve(Action.EXECUTE_PYTHON, code_bytes=len(code.encode()))
         self._remember_secrets(environment or {})
         self._emit(EventType.EXECUTION_STARTED, kind="python")
-        try:
-            result = self._backend.exec(
-                ["python", "-c", code],
-                display_command="python -c <code>",
-                environment=reveal_environment(environment or {}),
-                workdir=self._effective_workdir(workdir),
-                timeout=self._effective_timeout(timeout),
-            )
-            result = self._redact_result(result, environment or {})
-            self._emit(
-                EventType.EXECUTION_FINISHED,
-                kind="python",
-                exit_code=result.exit_code,
-                duration=result.duration,
-            )
-            return result
-        except ExecutionTimeoutError:
-            self.destroy()
-            raise
+        result = self._backend.exec(
+            ["python", "-c", code],
+            display_command="python -c <code>",
+            environment=reveal_environment(environment or {}),
+            workdir=self._effective_workdir(workdir),
+            timeout=self._effective_timeout(timeout),
+        )
+        result = self._redact_result(result, environment or {})
+        self._emit(
+            EventType.EXECUTION_FINISHED,
+            kind="python",
+            exit_code=result.exit_code,
+            duration=result.duration,
+        )
+        return result
 
     def exec(
         self,
@@ -156,25 +152,21 @@ class Sandbox:
         self._approve(Action.EXECUTE, command=command)
         self._remember_secrets(environment or {})
         self._emit(EventType.EXECUTION_STARTED, kind="command")
-        try:
-            result = self._backend.exec(
-                command,
-                display_command=display_command or " ".join(command),
-                environment=reveal_environment(environment or {}),
-                workdir=self._effective_workdir(workdir),
-                timeout=self._effective_timeout(timeout),
-            )
-            result = self._redact_result(result, environment or {})
-            self._emit(
-                EventType.EXECUTION_FINISHED,
-                kind="command",
-                exit_code=result.exit_code,
-                duration=result.duration,
-            )
-            return result
-        except ExecutionTimeoutError:
-            self.destroy()
-            raise
+        result = self._backend.exec(
+            command,
+            display_command=display_command or " ".join(command),
+            environment=reveal_environment(environment or {}),
+            workdir=self._effective_workdir(workdir),
+            timeout=self._effective_timeout(timeout),
+        )
+        result = self._redact_result(result, environment or {})
+        self._emit(
+            EventType.EXECUTION_FINISHED,
+            kind="command",
+            exit_code=result.exit_code,
+            duration=result.duration,
+        )
+        return result
 
     def exec_shell(
         self,
@@ -190,25 +182,21 @@ class Sandbox:
         self._approve(Action.EXECUTE_SHELL, script_bytes=len(script.encode()))
         self._remember_secrets(environment or {})
         self._emit(EventType.EXECUTION_STARTED, kind="shell")
-        try:
-            result = self._backend.exec(
-                ["sh", "-c", script],
-                display_command=script,
-                environment=reveal_environment(environment or {}),
-                workdir=self._effective_workdir(workdir),
-                timeout=self._effective_timeout(timeout),
-            )
-            result = self._redact_result(result, environment or {})
-            self._emit(
-                EventType.EXECUTION_FINISHED,
-                kind="shell",
-                exit_code=result.exit_code,
-                duration=result.duration,
-            )
-            return result
-        except ExecutionTimeoutError:
-            self.destroy()
-            raise
+        result = self._backend.exec(
+            ["sh", "-c", script],
+            display_command=script,
+            environment=reveal_environment(environment or {}),
+            workdir=self._effective_workdir(workdir),
+            timeout=self._effective_timeout(timeout),
+        )
+        result = self._redact_result(result, environment or {})
+        self._emit(
+            EventType.EXECUTION_FINISHED,
+            kind="shell",
+            exit_code=result.exit_code,
+            duration=result.duration,
+        )
+        return result
 
     def stream_shell(
         self,
@@ -227,25 +215,21 @@ class Sandbox:
             raise UnsupportedCapabilityError("this backend does not support streaming execution")
         self._emit(EventType.EXECUTION_STARTED, kind="shell", streaming=True)
         values = {**self._secrets, **(environment or {})}
-        try:
-            for chunk in self._backend.stream_exec(
-                ["sh", "-c", script],
-                display_command=script,
-                environment=reveal_environment(environment or {}),
-                workdir=self._effective_workdir(workdir),
-                timeout=self._effective_timeout(timeout),
-            ):
-                yield replace(chunk, data=redact(chunk.data, values))
-                if chunk.stream == "status":
-                    self._emit(
-                        EventType.EXECUTION_FINISHED,
-                        kind="shell",
-                        streaming=True,
-                        exit_code=chunk.exit_code,
-                    )
-        except ExecutionTimeoutError:
-            self.destroy()
-            raise
+        for chunk in self._backend.stream_exec(
+            ["sh", "-c", script],
+            display_command=script,
+            environment=reveal_environment(environment or {}),
+            workdir=self._effective_workdir(workdir),
+            timeout=self._effective_timeout(timeout),
+        ):
+            yield replace(chunk, data=redact(chunk.data, values))
+            if chunk.stream == "status":
+                self._emit(
+                    EventType.EXECUTION_FINISHED,
+                    kind="shell",
+                    streaming=True,
+                    exit_code=chunk.exit_code,
+                )
 
     def write_file(self, path: str, content: str | bytes, *, encoding: str = "utf-8") -> None:
         """Write text or bytes to a relative workspace path."""
@@ -280,6 +264,15 @@ class Sandbox:
 
         result = self.exec_python(code, timeout=timeout, environment=environment).check()
         return json.loads(result.stdout)
+
+    def python_session(self, *, start_timeout: float = 30.0) -> PythonSession:
+        """Start a stateful interpreter whose namespace persists across calls."""
+
+        self._ensure_active()
+        self._approve(Action.EXECUTE_PYTHON, session=True)
+        session = PythonSession(self, start_timeout=start_timeout)
+        session.start()
+        return session
 
     def artifacts(self, pattern: str = "**/*") -> tuple[Artifact, ...]:
         """List regular workspace files with sizes and SHA-256 checksums."""
@@ -346,6 +339,30 @@ print(json.dumps(items))
             raise UnsupportedCapabilityError("this backend does not support snapshots")
         self._backend.restore(Path(source))
         self._emit(EventType.SNAPSHOT_RESTORED, path=str(source))
+
+    def fork(self) -> Sandbox:
+        """Branch this sandbox into an independent copy of its current state.
+
+        The child starts from a copy of this sandbox's filesystem and then
+        diverges: neither sees the other's later writes. This lets an agent try
+        several continuations from one point -- speculative fixes, A/B attempts,
+        tree search -- and keep only the branch that worked.
+        """
+
+        self._ensure_active()
+        self._approve(Action.FORK)
+        if not isinstance(self._backend, ForkableBackend):
+            raise UnsupportedCapabilityError("this backend does not support forking")
+        forked_backend = self._backend.fork()
+        child = Sandbox._adopt(
+            forked_backend,
+            self._config,
+            secrets=self._secrets,
+            observers=self._observers,
+            approval_hook=self._approval_hook,
+        )
+        self._emit(EventType.FORKED, child=child.id)
+        return child
 
     def logs(self) -> str:
         """Return output accumulated by the sandbox backend."""
@@ -437,3 +454,37 @@ print(json.dumps(items))
         if isinstance(backend, RuntimeBackend):
             return backend
         return registry.create(backend)
+
+    @classmethod
+    def _adopt(
+        cls,
+        backend: RuntimeBackend,
+        config: SandboxConfig,
+        *,
+        secrets: Mapping[str, str | Secret],
+        observers: tuple[EventObserver, ...],
+        approval_hook: ApprovalHook,
+    ) -> Sandbox:
+        """Wrap an already-started backend (e.g. a fork) in a fresh sandbox."""
+
+        sandbox = cls.__new__(cls)
+        sandbox.id = uuid.uuid4().hex
+        sandbox._secrets = dict(secrets)
+        sandbox._redaction_secrets = dict(secrets)
+        sandbox._config = config
+        sandbox._backend = backend
+        sandbox._lock = threading.RLock()
+        sandbox._destroyed = False
+        sandbox._observers = observers
+        sandbox._approval_hook = approval_hook
+        sandbox._timer = threading.Timer(config.timeout, sandbox.destroy)
+        sandbox._timer.daemon = True
+        sandbox._deadline = time.monotonic() + config.timeout
+        sandbox._timer.start()
+        sandbox._emit(
+            EventType.CREATED,
+            image=config.image,
+            backend=type(backend).__name__,
+            forked=True,
+        )
+        return sandbox

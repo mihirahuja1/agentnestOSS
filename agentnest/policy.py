@@ -59,6 +59,7 @@ class SecurityPolicy:
     seccomp_profile: str | None = None
     apparmor_profile: str | None = None
     rootless: bool = False
+    egress_proxy_image: str = "python:3.12-slim"
 
     def __post_init__(self) -> None:
         if self.max_output_bytes <= 0:
