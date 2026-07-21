@@ -20,7 +20,9 @@ class ExecutionError(AgentNestError):
 class ExecutionTimeoutError(ExecutionError):
     """Raised when an execution exceeds its deadline.
 
-    The sandbox is destroyed when this happens so timed-out code cannot continue
+    On images that provide coreutils ``timeout`` only the offending process is
+    terminated and the sandbox stays alive and reusable. On images without it,
+    the host-side backstop destroys the sandbox so timed-out code cannot keep
     running out of sight.
     """
 

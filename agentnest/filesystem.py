@@ -102,7 +102,12 @@ def bounded_read(root: Path, relative_path: str, max_bytes: int = DEFAULT_MAX_RE
     parent_descriptor: int | None = None
     try:
         parent_descriptor, filename = _open_parent(root, parts, create=False)
-        file_descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_descriptor)
+        # O_NONBLOCK ensures opening a FIFO planted in the workspace returns
+        # immediately instead of blocking forever on a writer; the regular-file
+        # check below then rejects it.
+        file_descriptor = os.open(
+            filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_descriptor
+        )
         with os.fdopen(file_descriptor, "rb") as handle:
             metadata = os.fstat(handle.fileno())
             if not stat.S_ISREG(metadata.st_mode):

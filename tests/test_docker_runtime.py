@@ -79,8 +79,14 @@ def test_create_failure_is_mapped_and_workspace_is_cleaned() -> None:
 
 def test_exec_files_and_logs() -> None:
     client, container = docker_client()
-    container.exec_run.return_value = SimpleNamespace(exit_code=3, output=(b"out\n", b"err\n"))
+    container.id = "container-id"
+    # _detect_timeout probes for coreutils `timeout`; report absent so commands
+    # are not wrapped and are passed through verbatim.
+    container.exec_run.return_value = SimpleNamespace(exit_code=1)
     container.logs.return_value = b"container\n"
+    client.api.exec_create.return_value = {"Id": "exec-id"}
+    client.api.exec_start.return_value = iter(((b"out\n", None), (None, b"err\n")))
+    client.api.exec_inspect.return_value = {"ExitCode": 3}
     runtime = DockerRuntime(client=client)
     runtime.create(SandboxConfig("python:test", 30))
 
@@ -99,8 +105,8 @@ def test_exec_files_and_logs() -> None:
     assert result.stderr == "err\n"
     assert "$ work\n" in runtime.logs()
     assert "container\n" in runtime.logs()
-    call = container.exec_run.call_args
-    assert call.args[0] == ["sh", "-c", "work"]
+    call = client.api.exec_create.call_args
+    assert call.args[1] == ["sh", "-c", "work"]
     assert call.kwargs["environment"] == {"KEY": "value"}
     assert call.kwargs["user"] == "65532:65532"
     runtime.destroy()
@@ -155,8 +161,10 @@ def test_snapshot_restore_and_streaming(tmp_path: Path) -> None:
 def test_docker_fails_closed_for_unsupported_security_policies() -> None:
     client, _ = docker_client()
     runtime = DockerRuntime(client=client)
-    policy = SecurityPolicy(network=NetworkPolicy.allowlist(domains=("example.com",)))
-    with pytest.raises(UnsupportedCapabilityError, match="cannot enforce"):
+    # Domain allowlists are enforced by the egress proxy; raw CIDR allowlists are
+    # not expressible through a CONNECT proxy and must still fail closed.
+    policy = SecurityPolicy(network=NetworkPolicy.allowlist(cidrs=("10.0.0.0/8",)))
+    with pytest.raises(UnsupportedCapabilityError, match="CIDR"):
         runtime.create(SandboxConfig("python:test", 30, security_policy=policy))
 
     rootless = DockerRuntime(client=client)

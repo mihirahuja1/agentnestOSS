@@ -20,13 +20,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"AgentNest {__version__}")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
-    run = subcommands.add_parser("run", help="run a Python file in a new sandbox")
-    run.add_argument("file", type=Path)
+    run = subcommands.add_parser("run", help="run Python code or a .py file in a new sandbox")
+    run.add_argument("code", help="Python source, or a path to a .py file")
     _sandbox_arguments(run)
 
     shell = subcommands.add_parser("shell", help="run a shell script in a new sandbox")
     shell.add_argument("script")
     _sandbox_arguments(shell)
+
+    subcommands.add_parser("demo", help="run a self-contained sandbox demo (no arguments needed)")
+
+    prune = subcommands.add_parser("prune", help="remove managed sandboxes left by crashes")
+    prune.add_argument(
+        "--all",
+        action="store_true",
+        dest="force_all",
+        help="remove every managed sandbox, not only expired ones",
+    )
 
     subcommands.add_parser("backends", help="list discovered runtime backends")
     subcommands.add_parser("doctor", help="check the local runtime environment")
@@ -92,16 +102,76 @@ def main(argv: list[str] | None = None) -> int:
 
         create_mcp_server().run()
         return 0
+    if arguments.command == "prune":
+        return _prune(arguments.force_all)
+    if arguments.command == "demo":
+        return _demo()
 
     with Sandbox(**_sandbox_options(arguments)) as sandbox:
         if arguments.command == "run":
-            code = arguments.file.read_text(encoding="utf-8")
+            candidate = Path(arguments.code)
+            if arguments.code.endswith(".py") and candidate.is_file():
+                code = candidate.read_text(encoding="utf-8")
+            else:
+                code = arguments.code
             result = sandbox.exec_python(code)
         else:
             result = sandbox.exec_shell(arguments.script)
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         return result.exit_code
+
+
+def _prune(force_all: bool) -> int:
+    from agentnest.reaper import prune
+
+    try:
+        report = prune(force_all=force_all)
+    except Exception as exc:
+        # Docker transport failures are not AgentNest types; report them plainly.
+        print(f"prune failed: {exc}", file=sys.stderr)
+        return 1
+    print(
+        json.dumps(
+            {
+                "removed": report.total,
+                "containers": report.containers,
+                "networks": report.networks,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _demo() -> int:
+    from agentnest import MemoryObserver
+
+    observer = MemoryObserver()
+    try:
+        with Sandbox("python:3.12-slim", timeout=60, observers=(observer,)) as sandbox:
+            print("Started a locked-down sandbox: non-root, read-only root, no network.")
+            sandbox.write_file("demo.py", "print('hello from an isolated sandbox')")
+            printed = sandbox.exec_shell("python demo.py")
+            print(f"  ran a file       -> {printed.stdout.strip()}")
+
+            session = sandbox.python_session()
+            session.run("total = 0")
+            for value in range(1, 5):
+                session.run(f"total += {value}")
+            print(f"  stateful session -> total is {session.run('total').check().result}")
+
+            blocked = sandbox.exec_python(
+                "import urllib.request\nurllib.request.urlopen('https://example.com', timeout=5)"
+            )
+            print(f"  network egress   -> blocked by default: {not blocked.ok}")
+        print(f"Sandbox destroyed. Captured {len(observer.events)} audit events.")
+    except Exception as exc:
+        # Surface a friendly hint for any setup issue (usually a missing daemon).
+        print(f"demo could not run: {exc}", file=sys.stderr)
+        print("Check your Docker setup with: agentnest doctor", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _doctor() -> int:

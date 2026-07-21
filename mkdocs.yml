@@ -54,11 +54,13 @@ nav:
       - Async and streaming: guides/async-streaming.md
       - Templates and snapshots: guides/state.md
       - Pools and artifacts: guides/pools-artifacts.md
+      - Framework integrations: guides/integrations.md
       - Kubernetes and remote workers: guides/remote.md
       - MCP, browser, GPU, and Git: guides/agents.md
   - Reference:
       - Python API: api.md
       - CLI: cli.md
+      - Benchmarks: benchmarks.md
       - Configuration profiles: configuration.md
   - Operations:
       - Deployment: deployment.md

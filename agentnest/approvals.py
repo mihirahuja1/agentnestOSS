@@ -17,6 +17,7 @@ class Action(str, Enum):
     READ_FILE = "read_file"
     SNAPSHOT = "snapshot"
     RESTORE = "restore"
+    FORK = "fork"
 
 
 @dataclass(frozen=True, slots=True)

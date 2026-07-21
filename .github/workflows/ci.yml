@@ -27,6 +27,19 @@ jobs:
       - run: mypy agentnest
       - run: pytest --cov=agentnest --cov-report=term-missing
 
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e '.[dev]'
+      # GitHub-hosted Ubuntu runners ship a working Docker daemon. Run the live
+      # sandbox tests -- including the escape-attempt suite -- on every push.
+      - run: AGENTNEST_DOCKER_TESTS=1 pytest -m integration
+
   docs:
     runs-on: ubuntu-latest
     steps:

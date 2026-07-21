@@ -22,6 +22,7 @@ class EventType(str, Enum):
     FILE_READ = "file.read"
     SNAPSHOT_CREATED = "snapshot.created"
     SNAPSHOT_RESTORED = "snapshot.restored"
+    FORKED = "sandbox.forked"
     DESTROYED = "sandbox.destroyed"
     POLICY_DENIED = "policy.denied"
 

@@ -72,7 +72,7 @@ def test_unknown_backend_is_rejected() -> None:
         Sandbox(backend="magic")
 
 
-def test_backend_timeout_marks_sandbox_destroyed() -> None:
+def test_backend_timeout_leaves_sandbox_reusable() -> None:
     class TimingOutRuntime(FakeRuntime):
         def exec(self, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
             raise ExecutionTimeoutError("timed out")
@@ -81,5 +81,8 @@ def test_backend_timeout_marks_sandbox_destroyed() -> None:
     sandbox = Sandbox(backend=backend)
     with pytest.raises(ExecutionTimeoutError):
         sandbox.exec_shell("sleep forever")
-    assert sandbox.destroyed
-    assert backend.destroy_count == 1
+    # A per-command timeout kills only that process; the sandbox stays usable so
+    # an agent does not lose accumulated workspace state to one slow command.
+    assert not sandbox.destroyed
+    assert backend.destroy_count == 0
+    sandbox.destroy()
