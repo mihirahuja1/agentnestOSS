@@ -134,19 +134,23 @@ helpers, browser/GPU presets, MCP tools, YAML profiles, a CLI, and an authentica
 
 ## How it compares
 
-AgentNest is a self-hosted control layer, not a hosted sandbox service. The
-distinction that matters: it decides what an agent's code is *allowed to do* and
-records what it *did*, across whatever backend you run.
+AgentNest is an open-source control and policy layer for infrastructure you
+operate. It does not try to replace the isolation technology underneath it or
+provide a hosted compute cloud.
 
-| | AgentNest | E2B | Modal Sandboxes | microsandbox | llm-sandbox |
-| --- | --- | --- | --- | --- | --- |
-| Self-hosted, no account | ✅ | ⚠️ hosted | ⚠️ hosted | ✅ | ✅ |
-| Domain egress allowlist | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Stateful REPL sessions | ✅ | ✅ | ✅ | ✅ | ⚠️ partial |
-| Forkable state | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Approval hooks + audit events | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Pluggable isolation backend | ✅ | ❌ | ❌ | ❌ | ⚠️ |
-| Auditable in an afternoon (~4k LOC) | ✅ | ❌ | ❌ | ⚠️ | ✅ |
+| Project | Operating model | Isolation layer | Primary focus |
+| --- | --- | --- | --- |
+| **AgentNest** | Open-source Python library; runs on your Docker or Kubernetes infrastructure | Backend-dependent; Docker by default, with stronger OCI runtimes available | A consistent API for execution, policy, lifecycle management, approvals, and audit events |
+| [E2B](https://e2b.dev/) | Managed service, with enterprise BYOC, on-premises, and self-hosted options | Firecracker microVMs | Managed agent sandboxes, templates, and cloud infrastructure |
+| [Modal Sandboxes](https://modal.com/docs/guide/sandboxes) | Managed cloud service | gVisor by default, with a VM runtime in beta | Sandboxes integrated with Modal's broader compute platform |
+| [microsandbox](https://github.com/zerocore-ai/microsandbox) | Open-source, embedded local runtime | Hardware-isolated microVMs | Fast local microVMs without a separate server or long-running daemon |
+
+This is a positioning summary, not an exhaustive feature matrix; these projects
+evolve quickly. In particular, AgentNest's default Docker backend does **not**
+provide the same isolation boundary as a Firecracker or hardware-isolated
+microVM because containers share the host kernel. For hostile multi-tenant code,
+select a stronger runtime such as gVisor or Kata Containers and validate it
+against your threat model.
 
 See [benchmarks](docs/benchmarks.md) for measured cold-start and round-trip latencies.
 
